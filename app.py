@@ -12,7 +12,12 @@ from langchain.agents.agent_toolkits import create_retriever_tool
 from langchain.embeddings.openai import OpenAIEmbeddings
 from langchain.vectorstores import FAISS
 from langchain.schema import Document
-from langchain.memory import ConversationBufferMemory
+from langchain.memory import ConversationBufferMemory, ConversationBufferWindowMemory
+from langchain.agents.agent import AgentExecutor
+import mlflow
+import pandas as pd
+from flask import Flask, request, jsonify
+from flask_cors import CORS
 
 
 def generate_sql_query(inp):
@@ -73,12 +78,6 @@ def get_retriever_tool(vector_db):
         description=tool_description
     )
 
-#db = SQLDatabase.from_uri("sqlite:///./portfolio_data.db",
-#                         include_tables=['corporate_portfolio'],
-#                         sample_rows_in_table_info=2
-#)
-#tools = SQLDatabaseToolkit(db=db, llm=OpenAI()).get_tools()
-
 few_shots = {
     "Give me the total exposure undrawn for 2022-12-31" : "SELECT SUM(EXPOSURE_UNDRAWN) FROM corporate_portfolio WHERE REPORTING_DATE = 2022-12-31"
 }
@@ -89,12 +88,12 @@ tools = [
     Tool.from_function(
         func=generate_sql_query,
         name="Generate SQL",
-        description="Useful for generating SQL queries. Generate an SQL query from a given input."
+        description="Useful for generating an sql queries from natural language. Input to this tool is natural language."
     ),
     get_retriever_tool(vector_db)
 ]
 
-memory = ConversationBufferMemory(memory_key="chat_history")
+memory = ConversationBufferWindowMemory(k=4, memory_key="chat_history")
 
 custom_suffix = """
 Thought:
@@ -110,9 +109,19 @@ agent = initialize_agent(
     agent=AgentType.CONVERSATIONAL_REACT_DESCRIPTION,
     memory=memory,
     verbose=True,
+    handle_parsing_errors=True,
 )
 
 agent.agent.llm_chain.prompt.template = agent.agent.llm_chain.prompt.template.format(chat_history="{chat_history}", input="{input}", agent_scratchpad = custom_suffix+ "{agent_scratchpad} ")
 
-print(agent.run("Give me an SQL query for the total undrawn exposure for 31-12-2022?"))
+app = Flask(__name__)
+CORS(app)
 
+@app.route('/', methods=['GET', 'POST'])
+def index():
+    prompt = request.get_json()["prompt"]
+    out = agent.run(prompt)
+    return {'response':out}
+
+if __name__ == '__main__':
+    app.run(debug=True)

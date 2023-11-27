@@ -1,0 +1,8 @@
+inputs,ground_truth
+What is the total EAD for 31-12-2022?,The total EAD for 31-12-2022 is 156657332.34921697.
+What is the total EAD for 12-31-2022?,The total EAD for 12-31-2022 is 156657332.34921697.
+What is the total exosure for 31-12-2022?,The total exposure for 31-12-2022 is 322820885.8920711.
+What is the change in total RWA from reporting date 2022-12-31 to reporting date 2023-03-31?,The change in the total RWA is 162222643.66022426.
+What is the total exposure of only those loan ids that have status from Performing on reporting date 2022-12-31 and status Non Performing on reporting date 2023-03-31?,The total exposure for those loans is 0.
+Read the information in table corporate_portfolio for loan id 1439964799kgeq68 and for reporting date 31-12-2022.,
+What is the change in PD for loan id 1439964799kgeq68 between reporting date 2022-12-31 and 2023-03-31.,
