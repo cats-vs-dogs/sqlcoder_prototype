@@ -16,7 +16,7 @@ from langchain.memory import ConversationBufferMemory, ConversationBufferWindowM
 from langchain.agents.agent import AgentExecutor
 import mlflow
 import pandas as pd
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, render_template
 from flask_cors import CORS
 
 
@@ -83,15 +83,22 @@ few_shots = {
 }
 vector_db = initialize_vectorstore(few_shots)
 
+db = SQLDatabase.from_uri("sqlite:///./portfolio_data.db",
+                         include_tables=['corporate_portfolio'],
+                         sample_rows_in_table_info=2
+)
+toolkit = SQLDatabaseToolkit(db=db, llm=OpenAI())
+
 
 tools = [
     Tool.from_function(
         func=generate_sql_query,
         name="Generate SQL",
-        description="Useful for generating an sql queries from natural language. Input to this tool is natural language."
+        description="Input to this tool is natural language that needs to be converted to SQL query. INPUT IS NOT AN SQL QUERY! Output is a correct SQL query."
     ),
     get_retriever_tool(vector_db)
 ]
+tools = tools+toolkit.get_tools();
 
 memory = ConversationBufferWindowMemory(k=4, memory_key="chat_history")
 

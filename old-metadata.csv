@@ -1,0 +1,23 @@
+CREATE TABLE corporate_portfolio (
+  REPORTING_DATE DATE -- (REPORTING_DATE) Reporting date
+  PARTNER_ID VARCHAR(50) -- (PARTNER_ID) ID of the partner
+  LOAN_ID VARCHAR(50) -- (LOAN_ID) ID of the loadn
+  PRODUCT VARCHAR(50) -- (PRODUCT) The loan product
+  STATUS VARCHAR(50) -- (STATUS) Status of the loan. Either "Performing" or "Non performing"
+  SEGMENT VARCHAR(50) -- (SEGMENT) Segment of the client business
+  EXPOSURE_DRAWN NUMERIC -- (EXPOSURE_DRAWN) Drawn exposure
+  EXPOSURE_UNDRAWN NUMERIC -- (EXPOSURE_UNDRAWN) Undrawn exposure
+  EXPOSURE NUMERIC -- (EXPOSURE) Exposure
+  EAD NUMERIC -- (EAD) Exposure at default
+  EAD_COLL NUMERIC -- (EAD_COLL) Exposure at default
+  PD NUMERIC -- (PD) Probability of default
+  LGD NUMERIC -- (LGD) Loss given default
+  SIZE NUMERIC -- (SIZE) The size of tje client in MEUR, usually this is the client's turnover
+  MATURITY NUMERIC -- (MATURITY) Maturity of the load
+  F_MORTGAGE CHAR(1)  -- (F_MORTGAGE) If 'Y' the loan is a mortgage, else 'N'
+  F_REVOLVING CHAR(1) -- (F_REVOLVING) If 'Y' the loan is revolving, else 'N'
+  F_LARGE_FIN CHAR(1) -- (F_LARGE_FIN) If 'Y' the client is large financial institution, else 'N'
+  RW NUMERIC -- (RW) Risk weight
+  RWA NUMERIC -- (RWA) Risk weight average
+);
+

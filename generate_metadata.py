@@ -12,8 +12,7 @@ def get_schemas(db_path):
     for raw_table_name in table_names:
         table_name = raw_table_name[0]
         schemas[table_name] = get_schema(cursor, table_name)
-        return schemas
-
+    return schemas
 
 def get_schema(cursor, table_name):
     table_schema = {}
@@ -31,8 +30,8 @@ def generate_metadata_file(schema, descriptions):
     file.close()
 
 def parse_descriptions(file_path):
-    df = pd.read_csv(file_path)
-    k = df["COLUMN_NAME"].to_list()
+    df = pd.read_csv(file_path, sep=";", encoding="iso_8859_1")
+    k = df["COLUMN_NAME"].str.upper().to_list()
     v = df["COLUMN_DESCRIPTION_EN"].to_list()
     return dict(zip(k, v))
         
@@ -40,8 +39,11 @@ def parse_descriptions(file_path):
 def generate_metadata(schema, table_name, file, descriptions):
     file.write(f"CREATE TABLE {table_name} (\n")
     for k, v in schema[table_name].items():
-        desc = descriptions[k]
-        file.write(f"\t{k} {v}, --{desc.strip()} \n")
+        desc = "NO DESCRIPTION WAS FOUND"
+        if k in descriptions:
+            desc = str(descriptions[k])
+            desc = desc.replace("\n", "")
+        file.write(f"\t{k} {v}, --{desc.rstrip()} \n")
     file.write(f");\n\n")
 
 
