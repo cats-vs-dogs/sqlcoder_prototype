@@ -13,6 +13,7 @@ from langchain.embeddings.openai import OpenAIEmbeddings
 from langchain.vectorstores import FAISS
 from langchain.schema import Document
 from langchain.memory import ConversationBufferMemory, ConversationBufferWindowMemory
+from langchain.prompts import PromptTemplate
 from langchain.agents.agent import AgentExecutor
 import mlflow
 import pandas as pd
@@ -40,7 +41,8 @@ def generate_sql_query(inp):
         repetition_penalty=1.1
     )
     sql_pipeline = HuggingFacePipeline(pipeline=pipe)
-    return sql_pipeline(prompt_template)
+    out = sql_pipeline(prompt_template)
+    return out 
 
 
 
@@ -70,6 +72,7 @@ def get_retriever_tool(vector_db):
     tool_description = """
     This tool will help you understand similar examples to adapt them to the user question.
     Input to this tool should be the user question.
+    IGNORE ITS OUTPUT IF THERE ARENT RELEVANT EXAMPLES.
     """
 
     return create_retriever_tool(
@@ -79,28 +82,27 @@ def get_retriever_tool(vector_db):
     )
 
 few_shots = {
-    "Give me the total exposure undrawn for 2022-12-31" : "SELECT SUM(EXPOSURE_UNDRAWN) FROM corporate_portfolio WHERE REPORTING_DATE = 2022-12-31"
+    "Give me the total EAD" : "SELECT SUM(EAD) FROM Transactions"
 }
 vector_db = initialize_vectorstore(few_shots)
 
-db = SQLDatabase.from_uri("sqlite:///./portfolio_data.db",
-                         include_tables=['corporate_portfolio'],
+db = SQLDatabase.from_uri("sqlite:///./portfolio.db",
                          sample_rows_in_table_info=2
 )
 toolkit = SQLDatabaseToolkit(db=db, llm=OpenAI())
 
 
 tools = [
-    Tool.from_function(
-        func=generate_sql_query,
-        name="Generate SQL",
-        description="Input to this tool is natural language that needs to be converted to SQL query. INPUT IS NOT AN SQL QUERY! Output is a correct SQL query."
-    ),
+    #Tool.from_function(
+    #    func=generate_sql_query,
+    #    name="Generate SQL",
+    #    description="Input to this tool is natural language that needs to be converted to SQL query. INPUT IS NOT AN SQL QUERY! Output is a correct SQL query."
+    #),
     get_retriever_tool(vector_db)
 ]
 tools = tools+toolkit.get_tools();
 
-memory = ConversationBufferWindowMemory(k=4, memory_key="chat_history")
+memory = ConversationBufferWindowMemory(k=4, memory_key="history")
 
 custom_suffix = """
 Thought:
@@ -109,17 +111,55 @@ If the examples are enough to construct the query, I can build it.
 Otherwise, I can then look at the tables in the database to see what I can query.
 Then I should query the schema of the most relevant tables
 """
+prompt_temp = """
+You are an agent designed to interact with a SQL database.
+Given an input question, create a syntactically correct sqlite query to run, then look at the results of the query and return the answer.
+Unless the user specifies a specific number of examples they wish to obtain, always limit your query to at most 10 results.
+You can order the results by a relevant column to return the most interesting examples in the database.
+Never query for all the columns from a specific table, only ask for the relevant columns given the question.
+You have access to tools for interacting with the database.
+You MUST double check your query before executing it. If you get an error while executing a query, rewrite the query and try again.
+
+
+DO NOT make any DML statements (INSERT, UPDATE, DELETE, DROP etc.) to the database.
+
+
+If the question does not seem related to the database, YOU MUST RETURN ###### as the answer.
+
+Use the following format:
+Question: the input question you must answer
+Thought: you should always think about what to do
+Action: the action to take, should be one of [sql_db_query, sql_db_schema, sql_db_list_tables, sql_db_query_checker, Calculator, RWTool, sql_get_similar_examples]
+Action Input: the input to the action
+Observation: the result of the action
+... (this Thought/Action/Action Input/Observation can repeat N times)
+Thought: I now know the final answer
+Final Answer: the final answer to the original input question
+
+Begin!
+
+Previous conversation history:
+{history}
+
+Question: {input}
+Thought: I should first get the similar examples I know.
+If the examples are enough to construct the query, I can build it.
+Otherwise, I can then look at the tables in the database to see what I can query.
+Then I should query the schema of the most relevant tables
+{agent_scratchpad}
+"""
 
 agent = initialize_agent(
     tools, 
     llm=OpenAI(),
-    agent=AgentType.CONVERSATIONAL_REACT_DESCRIPTION,
+    agent=None, #AgentType.CONVERSATIONAL_REACT_DESCRIPTION,
     memory=memory,
     verbose=True,
+    prompt = PromptTemplate.from_template(prompt_temp),
     handle_parsing_errors=True,
 )
 
-agent.agent.llm_chain.prompt.template = agent.agent.llm_chain.prompt.template.format(chat_history="{chat_history}", input="{input}", agent_scratchpad = custom_suffix+ "{agent_scratchpad} ")
+#agent.agent.llm_chain.prompt.template = agent.agent.llm_chain.prompt.template.format(chat_history="{chat_history}", input="{input}", agent_scratchpad = custom_suffix+ "{agent_scratchpad} ")
 
 app = Flask(__name__)
 CORS(app)
@@ -131,4 +171,5 @@ def index():
     return {'response':out}
 
 if __name__ == '__main__':
-    app.run(debug=True)
+    print(agent.run("What is the date with the smallest LGD?"))
+    #app.run(debug=True)
