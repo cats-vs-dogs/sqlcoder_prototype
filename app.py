@@ -20,6 +20,13 @@ import pandas as pd
 from flask import Flask, request, jsonify, render_template
 from flask_cors import CORS
 
+from langchain.callbacks.manager import CallbackManager
+from langchain.callbacks.streaming_stdout import StreamingStdOutCallbackHandler
+from langchain.chains import LLMChain
+from langchain.llms import LlamaCpp
+from langchain.prompts import PromptTemplate
+from slimify import *
+
 
 def generate_sql_query(inp):
     model_name_or_path = "TheBloke/sqlcoder2-GPTQ"
@@ -47,12 +54,11 @@ def generate_sql_query(inp):
 
 
 
-def generate_prompt(question, prompt_file="prompt.md", metadata_file="metadata.sql"):
+def generate_prompt(question, prompt_file="prompt.md", metadata_file="metadata.json"):
     with open(prompt_file, "r") as f:
         prompt = f.read()
     
-    with open(metadata_file, "r") as f:
-        table_metadata_string = f.read()
+    table_metadata_string = generate_slim(metadata_file, question)
 
     prompt = prompt.format(
         user_question=question, table_metadata_string=table_metadata_string
@@ -93,11 +99,11 @@ toolkit = SQLDatabaseToolkit(db=db, llm=OpenAI())
 
 
 tools = [
-    #Tool.from_function(
-    #    func=generate_sql_query,
-    #    name="Generate SQL",
-    #    description="Input to this tool is natural language that needs to be converted to SQL query. INPUT IS NOT AN SQL QUERY! Output is a correct SQL query."
-    #),
+    Tool.from_function(
+        func=generate_sql_query,
+        name="Generate SQL",
+        description="Input to this tool is natural language that needs to be converted to SQL query. INPUT IS NOT AN SQL QUERY! Output is a correct SQL query."
+    ),
     get_retriever_tool(vector_db)
 ]
 tools = tools+toolkit.get_tools();
@@ -149,13 +155,31 @@ Then I should query the schema of the most relevant tables
 {agent_scratchpad}
 """
 
+orca_template = f"""
+### Instruction:
+
+{prompt_temp}
+
+### Response:
+"""
+
+#llm = LlamaCpp(
+#    model_path="./ggml-model-f16.gguf",
+#    temperature=0.75,
+#    max_tokens=2000,
+#    top_p=1,
+#    n_ctx=2048,
+#    verbose=True,  # Verbose is required to pass to the callback manager
+#)
+
+
 agent = initialize_agent(
     tools, 
     llm=OpenAI(),
     agent=None, #AgentType.CONVERSATIONAL_REACT_DESCRIPTION,
     memory=memory,
     verbose=True,
-    prompt = PromptTemplate.from_template(prompt_temp),
+    prompt = PromptTemplate.from_template(orca_template),
     handle_parsing_errors=True,
 )
 
@@ -171,5 +195,6 @@ def index():
     return {'response':out}
 
 if __name__ == '__main__':
-    print(agent.run("What is the date with the smallest LGD?"))
+    #print(agent.run("What is the date with the smallest EAD?"))
+    print(generate_sql_query("What is the user with the lowest LGD?"))
     #app.run(debug=True)
