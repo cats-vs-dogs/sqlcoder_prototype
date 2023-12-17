@@ -5,6 +5,7 @@ import sys
 
 
 def create_metadata(tables, generate_file=False):
+
     str_desc = ""
     for table_name in tables.keys():
         str_desc += f"CREATE TABLE {table_name} (\n"

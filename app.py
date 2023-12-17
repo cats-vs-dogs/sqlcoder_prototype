@@ -26,6 +26,13 @@ from langchain.chains import LLMChain
 from langchain.llms import LlamaCpp
 from langchain.prompts import PromptTemplate
 from slimify import *
+import re
+
+
+def fix_query(query):
+    regex = "::\w*"
+    fixed = re.sub(regex, "", query)
+    return fixed
 
 
 def generate_sql_query(inp):
@@ -33,7 +40,8 @@ def generate_sql_query(inp):
     model = AutoModelForCausalLM.from_pretrained(model_name_or_path,
                                              device_map="auto",
                                              trust_remote_code=False,
-                                             revision="main")
+                                             revision="gptq-8bit-128g-actorder_True",
+                                             )
     tokenizer = AutoTokenizer.from_pretrained(model_name_or_path, use_fast=True)
     prompt_template = generate_prompt(inp)
     pipe = pipeline(
@@ -49,6 +57,7 @@ def generate_sql_query(inp):
     )
     sql_pipeline = HuggingFacePipeline(pipeline=pipe)
     out = sql_pipeline(prompt_template)
+    out = fix_query(out)
     return out 
 
 
@@ -119,15 +128,9 @@ Then I should query the schema of the most relevant tables
 """
 prompt_temp = """
 You are an agent designed to interact with a SQL database.
-Given an input question, create a syntactically correct sqlite query to run, then look at the results of the query and return the answer.
-Unless the user specifies a specific number of examples they wish to obtain, always limit your query to at most 10 results.
-You can order the results by a relevant column to return the most interesting examples in the database.
-Never query for all the columns from a specific table, only ask for the relevant columns given the question.
+Given an input question,  use your tools to create a syntactically correct sqlite query to run, then look at the results of the query and return the answer.
 You have access to tools for interacting with the database.
 You MUST double check your query before executing it. If you get an error while executing a query, rewrite the query and try again.
-
-
-DO NOT make any DML statements (INSERT, UPDATE, DELETE, DROP etc.) to the database.
 
 
 If the question does not seem related to the database, YOU MUST RETURN ###### as the answer.
@@ -155,23 +158,6 @@ Then I should query the schema of the most relevant tables
 {agent_scratchpad}
 """
 
-orca_template = f"""
-### Instruction:
-
-{prompt_temp}
-
-### Response:
-"""
-
-#llm = LlamaCpp(
-#    model_path="./ggml-model-f16.gguf",
-#    temperature=0.75,
-#    max_tokens=2000,
-#    top_p=1,
-#    n_ctx=2048,
-#    verbose=True,  # Verbose is required to pass to the callback manager
-#)
-
 
 agent = initialize_agent(
     tools, 
@@ -179,7 +165,7 @@ agent = initialize_agent(
     agent=None, #AgentType.CONVERSATIONAL_REACT_DESCRIPTION,
     memory=memory,
     verbose=True,
-    prompt = PromptTemplate.from_template(orca_template),
+    prompt = PromptTemplate.from_template(prompt_temp),
     handle_parsing_errors=True,
 )
 
@@ -195,6 +181,6 @@ def index():
     return {'response':out}
 
 if __name__ == '__main__':
-    #print(agent.run("What is the date with the smallest EAD?"))
-    print(generate_sql_query("What is the user with the lowest LGD?"))
+    print(agent.run("What is the date with the highest total LGD?"))
+    #print(generate_sql_query("What is the user with the highest total EAD?"))
     #app.run(debug=True)
