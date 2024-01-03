@@ -2,10 +2,8 @@ from transformers import AutoModelForCausalLM, AutoTokenizer, pipeline
 from langchain.llms.huggingface_pipeline import HuggingFacePipeline
 from langchain.llms import OpenAI
 from langchain.agents import AgentType, initialize_agent, AgentExecutor
-from langchain.chains import LLMMathChain
 from langchain.chat_models import ChatOpenAI
 from langchain.tools import BaseTool, StructuredTool, Tool, tool
-from langchain.utilities import SerpAPIWrapper
 from langchain.agents.agent_toolkits import SQLDatabaseToolkit
 from langchain.utilities import SQLDatabase
 from langchain.agents.agent_toolkits import create_retriever_tool
@@ -13,29 +11,28 @@ from langchain.embeddings.openai import OpenAIEmbeddings
 from langchain.vectorstores import FAISS
 from langchain.schema import Document
 from langchain.memory import ConversationBufferMemory, ConversationBufferWindowMemory
-from langchain.prompts import PromptTemplate
+from langchain.prompts import PromptTemplate, load_prompt
 from langchain.agents.agent import AgentExecutor
-import mlflow
-import pandas as pd
 from flask import Flask, request, jsonify, render_template
 from flask_cors import CORS
-
-from langchain.callbacks.manager import CallbackManager
-from langchain.callbacks.streaming_stdout import StreamingStdOutCallbackHandler
-from langchain.chains import LLMChain
-from langchain.llms import LlamaCpp
-from langchain.prompts import PromptTemplate
 from slimify import *
 import re
 
 
 def fix_query(query):
+    r"""
+    Remove postgresql syntax symbols from
+    a generated query
+    """
     regex = "::\w*"
     fixed = re.sub(regex, "", query)
     return fixed
 
-
 def generate_sql_query(inp):
+    r"""
+    Translate a natural language query 
+    to sql.
+    """
     model_name_or_path = "TheBloke/sqlcoder2-GPTQ"
     model = AutoModelForCausalLM.from_pretrained(model_name_or_path,
                                              device_map="auto",
@@ -60,15 +57,14 @@ def generate_sql_query(inp):
     out = fix_query(out)
     return out 
 
-
-
-
 def generate_prompt(question, prompt_file="prompt.md", metadata_file="metadata.json"):
+    r"""
+    Generate a prompt containing the minimal 
+    database schema.
+    """
     with open(prompt_file, "r") as f:
         prompt = f.read()
-    
     table_metadata_string = generate_slim(metadata_file, question)
-
     prompt = prompt.format(
         user_question=question, table_metadata_string=table_metadata_string
     )
@@ -80,8 +76,6 @@ def initialize_vectorstore(few_shots={}):
     few_shot_docs = [Document(page_content=question, metadata={'sql_query': few_shots[question]}) for question in few_shots.keys()]
     return FAISS.from_documents(few_shot_docs, embeddings)
 
-
-
 def get_retriever_tool(vector_db):
     retriever = vector_db.as_retriever()
     tool_description = """
@@ -89,16 +83,13 @@ def get_retriever_tool(vector_db):
     Input to this tool should be the user question.
     IGNORE ITS OUTPUT IF THERE ARENT RELEVANT EXAMPLES.
     """
-
     return create_retriever_tool(
         retriever,
         name='sql_get_similar_examples',
         description=tool_description
     )
 
-few_shots = {
-    "Give me the total EAD" : "SELECT SUM(EAD) FROM Transactions"
-}
+few_shots = { "Give me the total EAD": "SELECT SUM(EAD) FROM Transactions" }
 vector_db = initialize_vectorstore(few_shots)
 
 db = SQLDatabase.from_uri("sqlite:///./portfolio.db",
@@ -126,50 +117,18 @@ If the examples are enough to construct the query, I can build it.
 Otherwise, I can then look at the tables in the database to see what I can query.
 Then I should query the schema of the most relevant tables
 """
-prompt_temp = """
-You are an agent designed to interact with a SQL database.
-Given an input question,  use your tools to create a syntactically correct sqlite query to run, then look at the results of the query and return the answer.
-You have access to tools for interacting with the database.
-You MUST double check your query before executing it. If you get an error while executing a query, rewrite the query and try again.
 
-
-If the question does not seem related to the database, YOU MUST RETURN ###### as the answer.
-
-Use the following format:
-Question: the input question you must answer
-Thought: you should always think about what to do
-Action: the action to take, should be one of [sql_db_query, sql_db_schema, sql_db_list_tables, sql_db_query_checker, Calculator, RWTool, sql_get_similar_examples]
-Action Input: the input to the action
-Observation: the result of the action
-... (this Thought/Action/Action Input/Observation can repeat N times)
-Thought: I now know the final answer
-Final Answer: the final answer to the original input question
-
-Begin!
-
-Previous conversation history:
-{history}
-
-Question: {input}
-Thought: I should first get the similar examples I know.
-If the examples are enough to construct the query, I can build it.
-Otherwise, I can then look at the tables in the database to see what I can query.
-Then I should query the schema of the most relevant tables
-{agent_scratchpad}
-"""
-
+main_prompt = load_prompt("./prompts/main_prompt.yaml")
 
 agent = initialize_agent(
     tools, 
     llm=OpenAI(),
-    agent=None, #AgentType.CONVERSATIONAL_REACT_DESCRIPTION,
+    agent=None,
     memory=memory,
     verbose=True,
-    prompt = PromptTemplate.from_template(prompt_temp),
+    prompt = main_prompt,
     handle_parsing_errors=True,
 )
-
-#agent.agent.llm_chain.prompt.template = agent.agent.llm_chain.prompt.template.format(chat_history="{chat_history}", input="{input}", agent_scratchpad = custom_suffix+ "{agent_scratchpad} ")
 
 app = Flask(__name__)
 CORS(app)
@@ -181,6 +140,6 @@ def index():
     return {'response':out}
 
 if __name__ == '__main__':
-    print(agent.run("What is the date with the highest total LGD?"))
+    print(agent.run("What is the date with the highest total EAD?"))
     #print(generate_sql_query("What is the user with the highest total EAD?"))
     #app.run(debug=True)
