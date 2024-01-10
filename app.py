@@ -91,13 +91,9 @@ def get_retriever_tool(vector_db):
 
 few_shots = { "Give me the total EAD": "SELECT SUM(EAD) FROM Transactions" }
 vector_db = initialize_vectorstore(few_shots)
-
 db = SQLDatabase.from_uri("sqlite:///./portfolio.db",
-                         sample_rows_in_table_info=2
-)
+                         sample_rows_in_table_info=2)
 toolkit = SQLDatabaseToolkit(db=db, llm=OpenAI())
-
-
 tools = [
     Tool.from_function(
         func=generate_sql_query,
@@ -106,7 +102,9 @@ tools = [
     ),
     get_retriever_tool(vector_db)
 ]
-tools = tools+toolkit.get_tools();
+sql_tools = toolkit.get_tools()
+sql_tools.pop(1)
+tools = tools+sql_tools
 
 memory = ConversationBufferWindowMemory(k=4, memory_key="history")
 
