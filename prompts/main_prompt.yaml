@@ -18,11 +18,8 @@ template: '
   You MUST double check your query before executing it. If you get an error while
   executing a query, rewrite the query and try again.
 
-
-
   If the question does not seem related to the database, YOU MUST RETURN ###### as
   the answer.
-
 
   Use the following format:
 

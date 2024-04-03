@@ -91,36 +91,29 @@ def get_retriever_tool(vector_db):
 
 few_shots = { "Give me the total EAD": "SELECT SUM(EAD) FROM Transactions" }
 vector_db = initialize_vectorstore(few_shots)
-db = SQLDatabase.from_uri("sqlite:///./portfolio.db",
+db = SQLDatabase.from_uri("sqlite:///./portfolio_data.db",
                          sample_rows_in_table_info=2)
 toolkit = SQLDatabaseToolkit(db=db, llm=OpenAI())
-tools = [
-    Tool.from_function(
-        func=generate_sql_query,
-        name="Generate SQL",
-        description="Input to this tool is natural language that needs to be converted to SQL query. INPUT IS NOT AN SQL QUERY! Output is a correct SQL query."
-    ),
-    get_retriever_tool(vector_db)
-]
-sql_tools = toolkit.get_tools()
-sql_tools.pop(1)
-tools = tools+sql_tools
+# tools = [
+#     Tool.from_function(
+#         func=generate_sql_query,
+#         name="Generate SQL",
+#         description="Input to this tool is natural language that needs to be converted to SQL query. INPUT IS NOT AN SQL QUERY! Output is a correct SQL query."
+#     ),
+#     get_retriever_tool(vector_db)
+# ]
+# sql_tools = toolkit.get_tools()
+# sql_tools.pop(1)
+# tools = tools+sql_tools
+tools = toolkit.get_tools()
 
 memory = ConversationBufferWindowMemory(k=4, memory_key="history")
-
-custom_suffix = """
-Thought:
-I should first get the similar examples I know.
-If the examples are enough to construct the query, I can build it.
-Otherwise, I can then look at the tables in the database to see what I can query.
-Then I should query the schema of the most relevant tables
-"""
 
 main_prompt = load_prompt("./prompts/main_prompt.yaml")
 
 agent = initialize_agent(
     tools, 
-    llm=OpenAI(),
+    llm=OpenAI(model_name="gpt-3.5-turbo-instruct"),
     agent=None,
     memory=memory,
     verbose=True,
@@ -137,7 +130,7 @@ def index():
     out = agent.run(prompt)
     return {'response':out}
 
-if __name__ == '__main__':
-    print(agent.run("What is the date with the highest total EAD?"))
-    #print(generate_sql_query("What is the user with the highest total EAD?"))
-    #app.run(debug=True)
+# if __name__ == '__main__':
+#     print(agent.run("What is the date with the highest total EAD?"))
+#     print(generate_sql_query("What is the user with the highest total EAD?"))
+#     app.run(debug=True)
