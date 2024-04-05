@@ -1,7 +1,7 @@
 from transformers import AutoModelForCausalLM, AutoTokenizer, pipeline
 from langchain.llms.huggingface_pipeline import HuggingFacePipeline
 from langchain.llms import OpenAI
-from langchain.agents import AgentType, initialize_agent, AgentExecutor
+from langchain.agents import AgentType, initialize_agent, AgentExecutor, load_tools
 from langchain.chat_models import ChatOpenAI
 from langchain.tools import BaseTool, StructuredTool, Tool, tool
 from langchain.agents.agent_toolkits import SQLDatabaseToolkit
@@ -154,7 +154,8 @@ RWTool = Tool.from_function(
 # sql_tools = toolkit.get_tools()
 # sql_tools.pop(1)
 # tools = tools+sql_tools
-tools = toolkit.get_tools() + [RWTool]
+search_tool = load_tools(["google-search"], llm=OpenAI())
+tools = toolkit.get_tools() + [RWTool] + search_tool
 
 memory = ConversationBufferWindowMemory(k=4, memory_key="history")
 
