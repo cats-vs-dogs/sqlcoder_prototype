@@ -8,7 +8,7 @@ output_parser: null
 partial_variables: {}
 template: '
 
-  You are an agent designed to interact with a SQL database.
+  You are an agent designed to interact with a SQL database containing credit risk data.
 
   Given an input question,  use your tools to create a syntactically correct sqlite
   query to run, then look at the results of the query and return the answer.

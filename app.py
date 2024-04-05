@@ -13,6 +13,8 @@ from langchain.schema import Document
 from langchain.memory import ConversationBufferMemory, ConversationBufferWindowMemory
 from langchain.prompts import PromptTemplate, load_prompt
 from langchain.agents.agent import AgentExecutor
+from langchain_community.utilities import GoogleSearchAPIWrapper 
+from tools.financial_tools import RWTool
 from flask import Flask, request, jsonify, render_template
 from flask_cors import CORS
 from pydantic import BaseModel, Field
@@ -129,19 +131,19 @@ vector_db = initialize_vectorstore(few_shots)
 db = SQLDatabase.from_uri("sqlite:///./portfolio_data.db",
                          sample_rows_in_table_info=2)
 toolkit = SQLDatabaseToolkit(db=db, llm=OpenAI())
-RWTool = Tool.from_function(
-    func=rw_corp,
-    name="RWTool",
-    description="""
-    This is a custom tool that calculates the risk weight from a set of input parameters:
-        PD - Probability of Default,
-        LGD - Loss Given Default,
-        MATURITY - Remaining maturity of the loan in years,
-        SIZE - The size of the client in MEUR, usually this is the client's turnover, 
-        F_LARGE_FIN - If 'Y' the client is a Large Financial Institution        
-        """,
-    # args_schema=RWInput
-)
+#RWTool = Tool.from_function(
+#    func=rw_corp,
+#    name="RWTool",
+#    description="""
+#    This is a custom tool that calculates the risk weight from a set of input parameters:
+#        PD - Probability of Default,
+#        LGD - Loss Given Default,
+#        MATURITY - Remaining maturity of the loan in years,
+#        SIZE - The size of the client in MEUR, usually this is the client's turnover, 
+#        F_LARGE_FIN - If 'Y' the client is a Large Financial Institution        
+#        """,
+#     args_schema=RWInput
+#)
 
 # tools = [
 #     Tool.from_function(
@@ -155,7 +157,13 @@ RWTool = Tool.from_function(
 # sql_tools.pop(1)
 # tools = tools+sql_tools
 search_tool = load_tools(["google-search"], llm=OpenAI())
-tools = toolkit.get_tools() + [RWTool] + search_tool
+search_tool = Tool(
+    name="google_search", 
+    description="Search Google for recent results.", 
+    func=GoogleSearchAPIWrapper().run
+)
+
+tools = toolkit.get_tools() + [search_tool, RWTool]
 
 memory = ConversationBufferWindowMemory(k=4, memory_key="history")
 
@@ -163,7 +171,7 @@ main_prompt = load_prompt("./prompts/main_prompt.yaml")
 
 agent = initialize_agent(
     tools, 
-    llm=OpenAI(model_name="gpt-3.5-turbo-instruct"),
+    llm=OpenAI(model_name="gpt-4"),
     agent=None,
     memory=memory,
     verbose=True,

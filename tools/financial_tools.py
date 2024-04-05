@@ -1,5 +1,6 @@
 import numpy as np
 import math
+from langchain.tools import Tool
 from scipy.stats import norm
 
 
