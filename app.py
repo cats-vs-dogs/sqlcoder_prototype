@@ -12,12 +12,17 @@ from langchain.vectorstores import FAISS
 from langchain.schema import Document
 from langchain.memory import ConversationBufferMemory, ConversationBufferWindowMemory
 from langchain.prompts import PromptTemplate, load_prompt
-from langchain.agents.agent import AgentExecutor
 from langchain_community.utilities import GoogleSearchAPIWrapper 
 from tools.financial_tools import RWTool
 from flask import Flask, request, jsonify, render_template
 from flask_cors import CORS
+from langchain_core.prompts.chat import MessagesPlaceholder
+from langchain import hub
+from langchain.agents import AgentExecutor, create_react_agent
+from langchain_community.tools.tavily_search import TavilySearchResults
 from pydantic import BaseModel, Field
+import math
+from scipy.stats import norm
 from slimify import *
 import re
 
@@ -131,31 +136,6 @@ vector_db = initialize_vectorstore(few_shots)
 db = SQLDatabase.from_uri("sqlite:///./portfolio_data.db",
                          sample_rows_in_table_info=2)
 toolkit = SQLDatabaseToolkit(db=db, llm=OpenAI())
-#RWTool = Tool.from_function(
-#    func=rw_corp,
-#    name="RWTool",
-#    description="""
-#    This is a custom tool that calculates the risk weight from a set of input parameters:
-#        PD - Probability of Default,
-#        LGD - Loss Given Default,
-#        MATURITY - Remaining maturity of the loan in years,
-#        SIZE - The size of the client in MEUR, usually this is the client's turnover, 
-#        F_LARGE_FIN - If 'Y' the client is a Large Financial Institution        
-#        """,
-#     args_schema=RWInput
-#)
-
-# tools = [
-#     Tool.from_function(
-#         func=generate_sql_query,
-#         name="Generate SQL",
-#         description="Input to this tool is natural language that needs to be converted to SQL query. INPUT IS NOT AN SQL QUERY! Output is a correct SQL query."
-#     ),
-#     get_retriever_tool(vector_db)
-# ]
-# sql_tools = toolkit.get_tools()
-# sql_tools.pop(1)
-# tools = tools+sql_tools
 search_tool = load_tools(["google-search"], llm=OpenAI())
 search_tool = Tool(
     name="google_search", 
@@ -163,32 +143,87 @@ search_tool = Tool(
     func=GoogleSearchAPIWrapper().run
 )
 
-tools = toolkit.get_tools() + [search_tool, RWTool]
+main_prompt = PromptTemplate.from_template(
+"""
+    You are an agent designed to interact with a SQL database containing credit risk data.
+    Given an input question,  use your tools to create a syntactically correct sqlite
+    query to run, then look at the results of the query and return the answer.
+    You have access to tools for interacting with the database.
+    You have access to the following tools:
 
-memory = ConversationBufferWindowMemory(k=4, memory_key="history")
+    {tools}
 
-main_prompt = load_prompt("./prompts/main_prompt.yaml")
+    You MUST double check your query before executing it. If you get an error while
+    executing a query, rewrite the query and try again.
+    Use the following format:
 
-agent = initialize_agent(
-    tools, 
-    llm=OpenAI(model_name="gpt-4"),
-    agent=None,
-    memory=memory,
-    verbose=True,
-    prompt = main_prompt,
-    handle_parsing_errors=True,
+    Question: the input question you must answer
+
+    Thought: you should always think about what to do
+
+    Action: the action to take, should be one of [{tool_names}]
+    Action Input: the input to the action
+    Observation: the result of the action
+    ... (this Thought/Action/Action Input/Observation can repeat N times)
+    Thought: I now know the final answer
+    Final Answer: the final answer to the original input question
+
+    Begin!
+
+    Previous conversation history:
+    {chat_history}
+
+    Question: {input}
+
+    Thought: I should first get the similar examples I know.
+    If the examples are enough to construct the query, I can build it.
+    Otherwise, I can then look at the tables in the database to see what I can query.
+    Then I should query the schema of the most relevant tables
+
+    Thought: {agent_scratchpad}
+""",
 )
+memory = ConversationBufferWindowMemory(k=4, memory_key="chat_history", return_messages=True)
+tools = toolkit.get_tools() + [search_tool, RWTool]
+llm=OpenAI(model_name="gpt-4")
+
+agent = create_react_agent(llm, tools, main_prompt)
+agent_executor = AgentExecutor(agent=agent, tools=tools, verbose=True)
+
+#agent = initialize_agent(
+#    tools, 
+#    llm=OpenAI(model_name="gpt-4"),
+#    agent=None,
+#    memory=memory,
+#    verbose=True,
+#    prompt = main_prompt,
+#    handle_parsing_errors=True,
+#    #agent_kwargs={
+#    #    "memory_prompts": [chat_history],
+#    #    "input_variables": ["input", "agent_scratchpad", "chat_history"]
+#    #},
+#)
+
 
 app = Flask(__name__)
 CORS(app)
 
 @app.route('/', methods=['GET', 'POST'])
 def index():
-    prompt = request.get_json()["prompt"]
-    out = agent.run(prompt)
-    return {'response':out}
+   print(memory.buffer_as_str)
+   input = request.get_json()["prompt"]
+   memory.chat_memory.add_user_message(input)
+   out = agent_executor.invoke({
+       "input": input,
+       "chat_history": memory.chat_memory,
+   })
+   out = out["output"]
+   memory.chat_memory.add_ai_message(input)
+   print(out)
+   return {'response':out}
 
-# if __name__ == '__main__':
-#     print(agent.run("What is the date with the highest total EAD?"))
-#     print(generate_sql_query("What is the user with the highest total EAD?"))
-#     app.run(debug=True)
+
+#if __name__ == "__main__":
+#    memory.chat_memory.add_ai_message("What can I help you with")
+#    memory.chat_memory.add_user_message("Say my name")
+#    print(main_prompt.format(chat_history=memory.chat_memory, input="NOGGER", agent_scratchpad="N"))
