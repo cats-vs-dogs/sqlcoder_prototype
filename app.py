@@ -9,6 +9,7 @@ import mysql
 
 
 def insert_entry(author: str, message: str):
+    message.replace("'", "`")
     query = """
     INSERT INTO messages (conv_id, date, author, message)
     VALUES ('{}', '{}', '{}', '{}')
@@ -18,55 +19,83 @@ def insert_entry(author: str, message: str):
 
 def retrieve_entries(conv_id:int) -> List[Tuple[int, str]]:
     query = """
-    SELECT author, message FROM messages WHERE conv_id = '{} ORDER BY date'
+    SELECT author, message FROM messages WHERE conv_id = '{}' ORDER BY date
     """.format(conv_id)
     cursor.execute(query)
     return [x for x in cursor]
 
-def retrieve_conversation_ids():
+def retrieve_conversation_id_names() -> List[Tuple[int, str]]:
     query = """
-    SELECT DISTINCT conv_id FROM messages
+    SELECT conv_id, message 
+    FROM( SELECT messages.*, MIN(id) OVER (PARTITION BY conv_id) AS min
+        FROM messages) AS tt
+    WHERE id = min 
     """
     cursor.execute(query)
-    return [x[0] for x in cursor]
+    return [x for x in cursor]
 
-if __name__ == "__main__":
-    config = {
-        "host":"localhost",
-        "user":"chatbot",
-        "password":"",
-        "database":"chatbot"
-    }
-    try:
+config = {
+    "host":"localhost",
+    "user":"chatbot",
+    "password":"",
+    "database":"chatbot"
+}
+try:
+    db_connection = connector.connect(**config)
+    cursor = db_connection.cursor()
+except mysql.connector.Error as err:
+    if err.errno == errorcode.ER_BAD_DB_ERROR:
+        del config["database"]
         db_connection = connector.connect(**config)
         cursor = db_connection.cursor()
-    except mysql.connector.Error as err:
-        if err.errno == errorcode.ER_BAD_DB_ERROR:
-            del config["database"]
-            db_connection = connector.connect(**config)
-            cursor = db_connection.cursor()
-            cursor.execute("CRETE DATABASE chatbot")
-        else:
-            print("Database connection failed with the following error:\n{}".format(err))
-    cursor.execute("SHOW TABLES")
-    tables = [x[0] for x in cursor]
-    if "messages" not in tables:
-        cursor.execute(
-        """
-        CREATE TABLE messages (
-            id INT unsigned NOT NULL AUTO_INCREMENT PRIMARY KEY,
-            conv_id INT unsigned NOT NULL,
-            date DATETIME NOT NULL,
-            author VARCHAR(100) NOT NULL,
-            message VARCHAR(10000) NOT NULL
-        )
-        """)
-    chatbot = Chatbot()
-    print(chatbot.run("My name is Heissenberg"))
-    print(chatbot.run("Say my name"))
-    print(retrieve_conversation_ids())
-    #app = Flask(__name__)
-    #CORS(app)
+        cursor.execute("CRETE DATABASE chatbot")
+    else:
+        print("Database connection failed with the following error:\n{}".format(err))
+cursor.execute("SHOW TABLES")
+tables = [x[0] for x in cursor]
+if "messages" not in tables:
+    cursor.execute(
+    """
+    CREATE TABLE messages (
+        id INT unsigned NOT NULL AUTO_INCREMENT PRIMARY KEY,
+        conv_id INT unsigned NOT NULL,
+        date DATETIME NOT NULL,
+        author VARCHAR(100) NOT NULL,
+        message VARCHAR(10000) NOT NULL
+    )
+    """)
+chatbot = Chatbot()
+app = Flask(__name__)
+CORS(app)
+
+@app.route("/", methods=["GET"])
+def index():
+    entries = retrieve_conversation_id_names()
+    response = [
+        {"conv_id": e[0], "message": e[1]} for e in entries 
+    ]
+    print(response)
+    return {
+        "repsonse": response 
+    } 
+    
+@app.route("/inference", methods=["GET"])
+def inference():
+    print("inf")
+    input = request.get_json()["prompt"]
+    insert_entry(author="User", message=input)
+    out = chatbot.run(input)
+    insert_entry(author="AI", message=out)
+    return {
+        "response": retrieve_entries(chatbot.conv_id)
+    }
+
+@app.route("/new", methods=["GET", "POST"])
+def new_conv():
+    chatbot.change_id()
+    return {
+        "response": retrieve_entries(chatbot.conv_id)
+    }
 
 
 #
