@@ -20,6 +20,8 @@ import math
 from scipy.stats import norm
 from slimify import *
 import uuid
+from typing import List, Tuple
+from langchain_core.messages.base import BaseMessage
 
 
 
@@ -121,7 +123,6 @@ class Chatbot():
     db = SQLDatabase.from_uri("sqlite:///./portfolio_data.db", sample_rows_in_table_info=2)
 
     def __init__(self, memory_window=4):
-        self.conv_id = uuid.uuid4().int & (1<<31)-1
         toolkit = SQLDatabaseToolkit(db=self.db, llm=OpenAI())
         search_tool = load_tools(["google-search"], llm=OpenAI())
         search_tool = Tool(
@@ -134,10 +135,23 @@ class Chatbot():
         agent = create_react_agent(llm, tools, self.main_prompt)
         self.agent_executor = AgentExecutor(agent=agent, tools=tools, verbose=True)
         self.memory = ConversationBufferWindowMemory(k=memory_window, memory_key="chat_history", return_messages=True, handle_parsing_errors=True)
+        self.conv_id = uuid.uuid4().int & (1<<31)-1
 
     def start_conversation(self):
         self.conv_id = uuid.uuid4().int & (1<<31)-1
         self.memory.clear()
+
+    def switch_conversation(self, conv_id: int, messages: List[Tuple[str, str]]):
+        self.conv_id = conv_id
+        self.memory.clear()
+        for entry in messages:
+            author, message = entry["author"], entry["message"]
+            if author == "AI":
+                self.memory.chat_memory.add_ai_message(message)
+            elif author == "User":
+                self.memory.chat_memory.add_user_message(message)
+            else:
+                raise Exception(f"Illegal author. {author} could not be recognized")
 
     def run(self, input: str) -> str:
         """
