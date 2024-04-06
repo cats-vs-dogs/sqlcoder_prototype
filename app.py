@@ -90,6 +90,7 @@ search_tool = Tool(
 main_prompt = PromptTemplate.from_template(
 """
     You are an agent designed to interact with a SQL database containing credit risk data.
+    You are also able to answer other, more general questions as well.
     Given an input question,  use your tools to create a syntactically correct sqlite
     query to run, then look at the results of the query and return the answer.
     You have access to tools for interacting with the database.
@@ -137,14 +138,25 @@ agent_executor = AgentExecutor(agent=agent, tools=tools, verbose=True)
 app = Flask(__name__)
 CORS(app)
 
-@app.route('/', methods=['GET', 'POST'])
+@app.route('/prompt', methods=['GET', 'POST'])
 def index():
-   input = request.get_json()["prompt"]
-   memory.chat_memory.add_user_message(input)
-   out = agent_executor.invoke({
-       "input": input,
-       "chat_history": memory.chat_memory,
-   })
-   out = out["output"]
-   memory.chat_memory.add_ai_message(input)
-   return {'response':out}
+    input = request.get_json()["prompt"]
+    memory.chat_memory.add_user_message(input)
+    try: 
+        out = agent_executor.invoke({
+             "input": input,
+             "chat_history": memory.chat_memory,
+        })["output"]
+    except:
+        out = "Sorry, I am unable to answer your question"
+    memory.chat_memory.add_ai_message(out)
+    print([
+        {"author": msg.type, "message": msg.content} for msg in memory.chat_memory.messages
+    ])
+    msg = memory.chat_memory.messages[-1]
+    return {"author": msg.type, "message": msg.content}
+
+@app.route('/histreset', methods=['DELETE'])
+def delete_history():
+    memory.clear()
+    return {}
