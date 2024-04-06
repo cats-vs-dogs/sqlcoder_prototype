@@ -135,8 +135,9 @@ class Chatbot():
         self.agent_executor = AgentExecutor(agent=agent, tools=tools, verbose=True)
         self.memory = ConversationBufferWindowMemory(k=memory_window, memory_key="chat_history", return_messages=True, handle_parsing_errors=True)
 
-    def change_id(self):
+    def start_conversation(self):
         self.conv_id = uuid.uuid4().int & (1<<31)-1
+        self.memory.clear()
 
     def run(self, input: str) -> str:
         """
