@@ -62,6 +62,8 @@ if __name__ == "__main__":
         )
         """)
     chatbot = Chatbot()
+    print(chatbot.run("My name is Heissenberg"))
+    print(chatbot.run("Say my name"))
     print(retrieve_conversation_ids())
     #app = Flask(__name__)
     #CORS(app)

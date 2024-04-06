@@ -1,19 +1,19 @@
 from transformers import AutoModelForCausalLM, AutoTokenizer, pipeline
 from langchain.llms.huggingface_pipeline import HuggingFacePipeline
-from langchain_openai import OpenAI
+from langchain.llms import OpenAI
 from langchain.agents import AgentExecutor, load_tools
 from langchain.tools import Tool
-# from langchain.agents.agent_toolkits import SQLDatabaseToolkit
-from langchain_community.agent_toolkits import SQLDatabaseToolkit
-from langchain_community.utilities import SQLDatabase
+from langchain.agents.agent_toolkits import SQLDatabaseToolkit
+from langchain.utilities import SQLDatabase
 from langchain.agents.agent_toolkits import create_retriever_tool
-from langchain_community.embeddings.openai import OpenAIEmbeddings
-from langchain_community.vectorstores import FAISS
+from langchain.embeddings.openai import OpenAIEmbeddings
+from langchain.vectorstores import FAISS
 from langchain.schema import Document
 from langchain.memory import ConversationBufferWindowMemory
 from langchain.prompts import PromptTemplate, load_prompt
 from langchain_community.utilities import GoogleSearchAPIWrapper 
 from tools.financial_tools import RWTool
+from flask_cors import CORS
 from langchain.agents import AgentExecutor, create_react_agent
 from pydantic import BaseModel, Field
 import math
@@ -133,7 +133,7 @@ class Chatbot():
         llm=OpenAI(model_name="gpt-4")
         agent = create_react_agent(llm, tools, self.main_prompt)
         self.agent_executor = AgentExecutor(agent=agent, tools=tools, verbose=True)
-        self.memory = ConversationBufferWindowMemory(k=memory_window, memory_key="chat_history", return_messages=True)
+        self.memory = ConversationBufferWindowMemory(k=memory_window, memory_key="chat_history", return_messages=True, handle_parsing_errors=True)
 
     def run(self, input: str) -> str:
         """
