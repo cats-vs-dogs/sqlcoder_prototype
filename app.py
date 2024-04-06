@@ -1,25 +1,21 @@
 from transformers import AutoModelForCausalLM, AutoTokenizer, pipeline
 from langchain.llms.huggingface_pipeline import HuggingFacePipeline
 from langchain.llms import OpenAI
-from langchain.agents import AgentType, initialize_agent, AgentExecutor, load_tools
-from langchain.chat_models import ChatOpenAI
-from langchain.tools import BaseTool, StructuredTool, Tool, tool
+from langchain.agents import AgentExecutor, load_tools
+from langchain.tools import Tool
 from langchain.agents.agent_toolkits import SQLDatabaseToolkit
 from langchain.utilities import SQLDatabase
 from langchain.agents.agent_toolkits import create_retriever_tool
 from langchain.embeddings.openai import OpenAIEmbeddings
 from langchain.vectorstores import FAISS
 from langchain.schema import Document
-from langchain.memory import ConversationBufferMemory, ConversationBufferWindowMemory
+from langchain.memory import ConversationBufferWindowMemory
 from langchain.prompts import PromptTemplate, load_prompt
 from langchain_community.utilities import GoogleSearchAPIWrapper 
 from tools.financial_tools import RWTool
-from flask import Flask, request, jsonify, render_template
+from flask import Flask, request
 from flask_cors import CORS
-from langchain_core.prompts.chat import MessagesPlaceholder
-from langchain import hub
 from langchain.agents import AgentExecutor, create_react_agent
-from langchain_community.tools.tavily_search import TavilySearchResults
 from pydantic import BaseModel, Field
 import math
 from scipy.stats import norm
@@ -59,58 +55,6 @@ def rw_corp(Input_String: str) -> str:
 class RWInput(BaseModel):
     Input_String: str = Field(description='This is a string that contains values for the input parameters \
                               PD, LGD, MATURITY, SIZE and F_LARGE_FIN which are fed into the formula in this particular order ')
-    
-
-def fix_query(query):
-    r"""
-    Remove postgresql syntax symbols from
-    a generated query
-    """
-    regex = "::\w*"
-    fixed = re.sub(regex, "", query)
-    return fixed
-
-def generate_sql_query(inp):
-    r"""
-    Translate a natural language query 
-    to sql.
-    """
-    model_name_or_path = "TheBloke/sqlcoder2-GPTQ"
-    model = AutoModelForCausalLM.from_pretrained(model_name_or_path,
-                                             device_map="auto",
-                                             trust_remote_code=False,
-                                             revision="gptq-8bit-128g-actorder_True",
-                                             )
-    tokenizer = AutoTokenizer.from_pretrained(model_name_or_path, use_fast=True)
-    prompt_template = generate_prompt(inp)
-    pipe = pipeline(
-        "text-generation",
-        model=model,
-        tokenizer=tokenizer,
-        max_new_tokens=512,
-        do_sample=True,
-        temperature=0.7,
-        top_p=0.95,
-        top_k=40,
-        repetition_penalty=1.1
-    )
-    sql_pipeline = HuggingFacePipeline(pipeline=pipe)
-    out = sql_pipeline(prompt_template)
-    out = fix_query(out)
-    return out 
-
-def generate_prompt(question, prompt_file="prompt.md", metadata_file="metadata.json"):
-    r"""
-    Generate a prompt containing the minimal 
-    database schema.
-    """
-    with open(prompt_file, "r") as f:
-        prompt = f.read()
-    table_metadata_string = generate_slim(metadata_file, question)
-    prompt = prompt.format(
-        user_question=question, table_metadata_string=table_metadata_string
-    )
-    return prompt
 
 def initialize_vectorstore(few_shots={}):
     embeddings = OpenAIEmbeddings()
@@ -190,27 +134,11 @@ llm=OpenAI(model_name="gpt-4")
 agent = create_react_agent(llm, tools, main_prompt)
 agent_executor = AgentExecutor(agent=agent, tools=tools, verbose=True)
 
-#agent = initialize_agent(
-#    tools, 
-#    llm=OpenAI(model_name="gpt-4"),
-#    agent=None,
-#    memory=memory,
-#    verbose=True,
-#    prompt = main_prompt,
-#    handle_parsing_errors=True,
-#    #agent_kwargs={
-#    #    "memory_prompts": [chat_history],
-#    #    "input_variables": ["input", "agent_scratchpad", "chat_history"]
-#    #},
-#)
-
-
 app = Flask(__name__)
 CORS(app)
 
 @app.route('/', methods=['GET', 'POST'])
 def index():
-   print(memory.buffer_as_str)
    input = request.get_json()["prompt"]
    memory.chat_memory.add_user_message(input)
    out = agent_executor.invoke({
@@ -219,11 +147,4 @@ def index():
    })
    out = out["output"]
    memory.chat_memory.add_ai_message(input)
-   print(out)
    return {'response':out}
-
-
-#if __name__ == "__main__":
-#    memory.chat_memory.add_ai_message("What can I help you with")
-#    memory.chat_memory.add_user_message("Say my name")
-#    print(main_prompt.format(chat_history=memory.chat_memory, input="NOGGER", agent_scratchpad="N"))
