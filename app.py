@@ -78,10 +78,10 @@ CORS(app)
 @app.route("/", methods=["GET"])
 def index():
     return {
-        "repsonse": retrieve_conversation_id_names() 
+        "response": retrieve_conversation_id_names() 
     } 
     
-@app.route("/inference", methods=["GET"])
+@app.route("/inference", methods=["GET", "POST"])
 def inference():
     input = request.get_json()["prompt"]
     insert_entry(author="User", message=input)
@@ -112,71 +112,3 @@ def delete_conversation():
     conv_id = request.get_json()["conv_id"]
     delete_entries(conv_id)
     return {}
-
-
-#
-#@app.route("/", methods=["GET"])
-#def index():
-#    #with open("conversations.pkl", "rb") as handle:
-#    #    conversations = pickle.load(handle)
-#    #    print(conversations)
-#    #return {"conversations": [
-#    #    {"id": conv["id"], "name": conv["name"]} for conv in conversations.values()
-#    #]}
-#
-#@app.route("/loadconv", methods=["GET"])
-#def get_conversation():
-#    conversation = []
-#    try:
-#        id = request.get_json()["id"]
-#        conversation = conversations[id]["conversation"]
-#        memory.chat_memory.messages = conversation
-#        conversation = [{"author": msg.type, "message": msg.content} for msg in conversation]
-#    except:
-#        # TODO
-#        pass
-#    return {"conversation": conversation}
-#
-#
-#@app.route('/prompt', methods=['GET', 'POST'])
-#def prompt_chatbot():
-#    input = request.get_json()["prompt"]
-#    memory.chat_memory.add_user_message(input)
-#    try: 
-#        out = agent_executor.invoke({
-#             "input": input,
-#             "chat_history": memory.chat_memory,
-#        })["output"]
-#    except:
-#        out = "Sorry, I am unable to answer this question"
-#    memory.chat_memory.add_ai_message(out)
-#    conversation = [{"author": msg.type, "message": msg.content} for msg in memory.chat_memory.messages]
-#    save_current_conversation()
-#    return {"conversation": conversation}
-#
-#@app.route('/save', methods=["POST", "GET"])
-#def save_current_conversation():
-#    with open("conversations.pkl", "wb") as handle:
-#        conversation = memory.chat_memory.messages
-#        name = conversation[0].content if len(conversation) else "New conversation"
-#        conversations[id] = {
-#            "id": id,
-#            "name": name,
-#            "conversation": conversation
-#        }
-#        pickle.dump(conversations, handle, protocol=pickle.HIGHEST_PROTOCOL)
-#    return {"conversations": [
-#            {"id": conv["id"], "name": conv["name"]} for conv in conversations.values()
-#        ],
-#    }
-#
-#@app.route('/newconv', methods=["POST", "GET"])
-#def start_conversation():
-#    conversations = save_current_conversation()
-#    memory.clear()
-#    conversation = [{"author": msg.type, "message": msg.content} for msg in memory.chat_memory.messages]
-#    return  {
-#        "conversations": conversations,
-#        "conversation": conversation
-#    }
-#
