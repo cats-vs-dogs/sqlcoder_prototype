@@ -133,7 +133,7 @@ class Chatbot():
         tools = toolkit.get_tools() + [search_tool, RWTool]
         llm=OpenAI(model_name="gpt-4")
         agent = create_react_agent(llm, tools, self.main_prompt)
-        self.agent_executor = AgentExecutor(agent=agent, tools=tools, verbose=True)
+        self.agent_executor = AgentExecutor(agent=agent, tools=tools, verbose=True, handle_parsing_errors=True)
         self.memory = ConversationBufferWindowMemory(k=memory_window, memory_key="chat_history", return_messages=True, handle_parsing_errors=True)
         self.conv_id = uuid.uuid4().int & (1<<31)-1
 
