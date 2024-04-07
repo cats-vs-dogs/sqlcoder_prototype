@@ -157,12 +157,12 @@ class Chatbot():
         """
         """
         self.memory.chat_memory.add_user_message(input)
-        try:
-            out = self.agent_executor.invoke({
-                "input": input,
-                "chat_history": self.memory.chat_memory
-            })["output"]
-        except:
-            out = "Sorry, I am unable to answer this question"
+        # try:
+        out = self.agent_executor.invoke({
+            "input": input,
+            "chat_history": self.memory.chat_memory
+        })["output"]
+        # except:
+            # out = "Sorry, I am unable to answer this question"
         self.memory.chat_memory.add_ai_message(out)
         return out 
