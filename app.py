@@ -1,7 +1,7 @@
 from typing import List, Tuple, Dict
 from flask import Flask, request
 from flask_cors import CORS
-from chatbot import Chatbot
+from chatbot_v2 import Chatbot
 from mysql import connector
 from mysql.connector import errorcode
 from datetime import datetime

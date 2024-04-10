@@ -1,6 +1,7 @@
 from transformers import AutoModelForCausalLM, AutoTokenizer, pipeline
 from langchain.llms.huggingface_pipeline import HuggingFacePipeline
 from langchain.llms import OpenAI
+from langchain.chat_models import ChatOpenAI
 from langchain.agents import AgentExecutor, load_tools
 from langchain.tools import Tool
 from langchain.agents.agent_toolkits import SQLDatabaseToolkit
@@ -22,6 +23,8 @@ from slimify import *
 import uuid
 from typing import List, Tuple
 from langchain_core.messages.base import BaseMessage
+
+
 
 
 
@@ -112,14 +115,56 @@ class Chatbot():
 
     Question: {input}
 
+
     Thought: I should first get the similar examples I know.
     If the examples are enough to construct the query, I can build it.
     Otherwise, I can then look at the tables in the database to see what I can query.
     Then I should query the schema of the most relevant tables
 
+
     Thought: {agent_scratchpad}
     """,
     )
+
+
+
+    # ------ BEGIN SMALL CHANGE ---------- 
+
+    # db = SQLDatabase.from_uri("sqlite:///./portfolio_data.db",
+    #                      include_tables=['corporate_portfolio'],
+    #                      sample_rows_in_table_info=2)
+
+    # def __init__(self, memory_window=5):
+    #     llm = ChatOpenAI(model_name='gpt-4',temperature=0)
+    #     toolkit = SQLDatabaseToolkit(db=self.db, llm=llm)
+    #     search_tool = load_tools(["google-search"], llm=OpenAI())
+    #     search_tool = Tool(
+    #         name="google_search", 
+    #         description="Search Google for recent results.", 
+    #         func=GoogleSearchAPIWrapper().run
+    #     )
+    #     RWTool = Tool.from_function(
+    #     func=rw_corp,
+    #     name="RWTool",
+    #     description="""
+    #     This is a custom tool that calculates the risk weight from a set of input parameters:
+    #         PD - Probability of Default,
+    #         LGD - Loss Given Default,
+    #         MATURITY - Remaining maturity of the loan in years,
+    #         SIZE - The size of the client in MEUR, usually this is the client's turnover, 
+    #         F_LARGE_FIN - If 'Y' the client is a Large Financial Institution        
+    #         """,
+    #     )
+    #     tools = toolkit.get_tools() + [search_tool, RWTool]
+
+    #     agent = create_react_agent(llm, tools, self.main_prompt)
+    #     self.agent_executor = AgentExecutor(agent=agent, tools=tools, verbose=True, handle_parsing_errors=True)
+    #     self.memory = ConversationBufferWindowMemory(k=memory_window, memory_key="chat_history", return_messages=True, handle_parsing_errors=True)
+    #     self.conv_id = uuid.uuid4().int & (1<<31)-1
+
+
+    # ------ END SMALL CHANGE ---------- 
+
     db = SQLDatabase.from_uri("sqlite:///./portfolio_data.db", sample_rows_in_table_info=2)
 
     def __init__(self, memory_window=4):
